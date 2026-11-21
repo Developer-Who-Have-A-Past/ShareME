@@ -1,0 +1,75 @@
+name: Build
+
+on:
+  push:
+    tags: ["v*"]        # runs when you push a tag like v1.0.0
+  workflow_dispatch:     # or run manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=android --project-name sharelan .
+        if: ${{ hashFiles('android/**') == '' }}
+      - name: Ensure permissions in AndroidManifest
+        shell: bash
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          for P in INTERNET ACCESS_WIFI_STATE CHANGE_WIFI_MULTICAST_STATE MANAGE_EXTERNAL_STORAGE; do
+            grep -q "android.permission.$P" "$M" || sed -i "0,/<application/s//<uses-permission android:name=\"android.permission.$P\"\/>\n    <application/" "$M"
+          done
+          grep -n 'uses-permission' "$M"
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharelan-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=windows --project-name sharelan .
+        if: ${{ hashFiles('windows/**') == '' }}
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sharelan-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharelan-windows
+          path: sharelan-windows.zip
+      - name: Build Windows installer (optional)
+        continue-on-error: true
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\sharelan.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharelan-windows-installer
+          path: installer_out/ShareLAN-Setup.exe
+          if-no-files-found: ignore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/app-release.apk
+            dist/sharelan-windows.zip
+            dist/ShareLAN-Setup.exe
