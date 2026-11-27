@@ -79,9 +79,50 @@ jobs:
           path: installer_out/ShareLAN-Setup.exe
           if-no-files-found: ignore
 
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter create --platforms=ios --project-name sharelan .
+        if: ${{ hashFiles('ios/**') == '' }}
+      - name: Add iOS Info.plist keys
+        shell: bash
+        run: |
+          PL=ios/Runner/Info.plist
+          B=/usr/libexec/PlistBuddy
+          set_str() { $B -c "Add :$1 string $2" "$PL" 2>/dev/null || $B -c "Set :$1 $2" "$PL"; }
+          set_bool() { $B -c "Add :$1 bool true" "$PL" 2>/dev/null || $B -c "Set :$1 true" "$PL"; }
+          set_str NSLocalNetworkUsageDescription "ShareLAN uses your local network to find and send files to your other devices."
+          set_str NSPhotoLibraryUsageDescription "ShareLAN lets you pick photos and videos to send."
+          set_bool UIFileSharingEnabled
+          set_bool LSSupportsOpeningDocumentsInPlace
+          $B -c "Print" "$PL" | grep -E "NSLocalNetwork|UIFileSharing|LSSupports|NSPhoto"
+      - run: flutter pub get
+      - name: Build iOS (unsigned)
+        shell: bash
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            if flutter build ios --release --no-codesign; then ok=1; break; fi
+            echo "Build attempt $i failed, retrying in 60s..."
+            sleep 60
+          done
+          [ "$ok" = 1 ]
+      - name: Package unsigned IPA
+        run: |
+          mkdir Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr ShareLAN-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharelan-ios-unsigned
+          path: ShareLAN-unsigned.ipa
+
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [android, windows]
+    needs: [android, windows, ios]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -92,3 +133,4 @@ jobs:
             dist/app-release.apk
             dist/sharelan-windows.zip
             dist/ShareLAN-Setup.exe
+            dist/ShareLAN-unsigned.ipa
