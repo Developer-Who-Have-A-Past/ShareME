@@ -168,7 +168,10 @@ class _Body extends StatelessWidget {
           controller: c,
           autofocus: true,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(hintText: 'e.g. 192.168.1.23'),
+          decoration: const InputDecoration(
+              hintText: 'e.g. 192.168.1.23',
+              helperText: 'Shown as "Your IP" on the other device',
+            ),
         ),
         actions: [
           TextButton(
@@ -320,8 +323,15 @@ class _Body extends StatelessWidget {
                                 ),
                           ),
                           const SizedBox(height: 4),
-                          Text('Saves to: ${state.saveDir.path}',
+                          if (state.localIps.isNotEmpty)
+                            Text('Your IP: ${state.localIps.join(", ")}',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                              Platform.isIOS
+                                  ? 'Saves to: Files app > On My iPhone > ShareLAN'
+                                  : 'Saves to: ${state.saveDir.path}',
                               style: Theme.of(context).textTheme.bodySmall),
+                          if (!Platform.isIOS)
                           Wrap(
                             spacing: 4,
                             children: [
@@ -376,7 +386,9 @@ class _Body extends StatelessWidget {
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(peer.os == 'android'
                             ? Icons.smartphone
-                            : Icons.laptop),
+                            : peer.os == 'ios'
+                                ? Icons.phone_iphone
+                                : Icons.laptop),
                         title: Text(peer.name),
                         subtitle: Text('${peer.ip}:${peer.port}'),
                       ),
@@ -410,7 +422,8 @@ class _Body extends StatelessWidget {
                   ),
                 ),
               ),
-            if (peers.isNotEmpty && !Platform.isAndroid)
+            if (peers.isNotEmpty &&
+                (Platform.isWindows || Platform.isMacOS || Platform.isLinux))
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text('Tip: drag files or folders onto this window to send them.',

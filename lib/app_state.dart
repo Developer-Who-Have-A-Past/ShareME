@@ -92,6 +92,7 @@ class AppState extends ChangeNotifier {
   Set<String> trusted = {}; // sender ids that are auto-accepted
   bool autoCopyText = false;
   ThemeMode themeMode = ThemeMode.system;
+  List<String> localIps = [];
 
   final List<TransferItem> transfers = [];
   final List<InboxItem> inbox = [];
@@ -127,10 +128,13 @@ class AppState extends ChangeNotifier {
 
     name = Platform.isAndroid
         ? 'Android-${id.substring(0, 4)}'
-        : Platform.localHostname;
+        : Platform.isIOS
+            ? 'iPhone-${id.substring(0, 4)}'
+            : Platform.localHostname;
     await _save();
     await _loadHistory();
 
+    await refreshIps();
     transfer = TransferService(this);
     final port = await transfer.start();
     discovery = Discovery(id: id, name: name, tcpPort: port, onPeer: _onPeer);
@@ -141,7 +145,27 @@ class AppState extends ChangeNotifier {
       peers.removeWhere((_, peer) =>
           !peer.manual && now.difference(peer.lastSeen).inSeconds > 10);
       if (peers.length != before) notifyListeners();
+      refreshIps();
     });
+  }
+
+  /// This device's WiFi/LAN addresses, shown so they can be typed on the
+  /// other device ("Add device by IP") if auto-discovery is blocked.
+  Future<void> refreshIps() async {
+    try {
+      final ifs = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      final ips = <String>[
+        for (final i in ifs)
+          for (final a in i.addresses) a.address,
+      ]..sort();
+      if (ips.join(',') != localIps.join(',')) {
+        localIps = ips;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   // ── Persistence ──
@@ -198,6 +222,8 @@ class AppState extends ChangeNotifier {
     Directory? base;
     if (Platform.isAndroid) {
       base = await getExternalStorageDirectory();
+    } else if (Platform.isIOS) {
+      base = await getApplicationDocumentsDirectory(); // shown in Files app
     } else {
       base = await getDownloadsDirectory();
     }

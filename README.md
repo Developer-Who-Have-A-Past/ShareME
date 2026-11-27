@@ -55,6 +55,20 @@ First launch on Windows triggers a firewall prompt: allow **Private networks**.
 - Android: "Save received files to Downloads" (Settings, needs "all files access")
 - Optional Windows installer (`ShareLAN-Setup.exe`) built by the GitHub workflow
 
+## iPhone (iOS)
+
+The same code builds for iPhone. GitHub builds an **unsigned** `ShareLAN-unsigned.ipa` on a Mac runner (`flutter build ios --no-codesign`); it's attached to each release.
+
+An unsigned IPA can't be installed directly. Pick one route:
+- **Free (sideload):** sign and install it with Sideloadly or AltStore using your Apple ID. With a free Apple ID the app must be re-installed every 7 days.
+- **Paid ($99/year Apple Developer Program):** sign it with your certificate and distribute through TestFlight or the App Store. This needs signing secrets added to the workflow.
+
+iPhone notes:
+- Keep ShareLAN open on the iPhone while sending or receiving. iOS pauses apps in the background.
+- On first launch iOS asks for **Local Network** access. Tap Allow.
+- Received files appear in the Files app > On My iPhone > ShareLAN.
+- Auto-discovery may not work on iOS (Apple restricts WiFi broadcast). If the other device doesn't appear, tap **Add device by IP** and type the "Your IP" shown on the Windows app, and the other way round.
+
 ## How it works
 
 - **Discovery:** each app broadcasts a small UDP beacon (port 45454) every 3 s and lists the beacons it hears. "Add by IP" (top right) is the fallback.
